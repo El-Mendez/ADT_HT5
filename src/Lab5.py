@@ -8,16 +8,16 @@ import random
 # ============ Valores que cambian según cada simulación ============
 RAM_memoria = 100  # La cantidad de memoria en la RAM
 CPU_ips = 1  # Instrucciones por unidad de tiempo que lee el CPU
-time_given = 3  # Es la cantidad de tiempo que se le da al procesador para hacer cada proceso
-cantidad_procesos = 25  # La cantidad de procesos que entraran al CPU
+time_given = 3  # Es la cantidad de tiempo que se le da al procesador como máximo para atender c/ proceso
+cantidad_procesos = 3  # La cantidad de procesos que entraran al CPU
 intervalos_procesos = 10  # El intervalo del tiempo en que llegan los procesos (ditr exponencial)
-cantidad_CPU = 1
+cantidad_CPU = 1  # Es la cantidad de CPUs en el sistema para atender los procesos
 
 random.seed(10)
 
-
 # =========================== Simulación ===========================
 run_time = []  # Lista con los tiempos totales de cada proceso
+
 
 def process(env, name, ram, cpu, cpu_ips, max_time, total_time):
     instructions = random.randint(1, 10)
@@ -52,7 +52,7 @@ def process(env, name, ram, cpu, cpu_ips, max_time, total_time):
             # Salgo del CPU
             yield cpu.put(1)
 
-            # Veo si tengo tengo que devolver la RAM (terminé o waiting)
+            # Veo si tengo tengo que devolver la RAM (terminated o waiting) o no (ready)
             hasRam = random.randint(1, 2) == 2 and instructions > 0
             if not hasRam:
                 yield ram.put(memory_needed)
@@ -68,15 +68,15 @@ def process(env, name, ram, cpu, cpu_ips, max_time, total_time):
     total_time.append(env.now - time)
 
 
-environmen  t = simpy.Environment()
+environment = simpy.Environment()
 RAM = simpy.Container(environment, init=RAM_memoria, capacity=RAM_memoria)
 CPU = simpy.Container(environment, init=cantidad_CPU, capacity=cantidad_CPU)
 
-environment.process(process(environment, "a", RAM, CPU, CPU_ips, time_given, run_time))
-environment.process(process(environment, "b", RAM, CPU, CPU_ips, time_given, run_time))
-environment.process(process(environment, "c", RAM, CPU, CPU_ips, time_given, run_time))
+for i in range(cantidad_procesos):
+    environment.process(process(environment, i, RAM, CPU, CPU_ips, time_given, run_time))
 
 environment.run()
+
 
 # ==================== Resultados ==========================
 
