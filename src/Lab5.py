@@ -11,7 +11,7 @@ CPU_ips = 1  # Instrucciones por unidad de tiempo que lee el CPU
 time_given = 3  # Es la cantidad de tiempo que se le da al procesador para hacer cada proceso
 cantidad_procesos = 25  # La cantidad de procesos que entraran al CPU
 intervalos_procesos = 10  # El intervalo del tiempo en que llegan los procesos (ditr exponencial)
-random.seed(500)
+random.seed(10)
 
 
 # =========================== Simulación ===========================
@@ -19,7 +19,7 @@ def process(env, name, ram, cpu, cpu_ips, max_time):
     instructions = random.randint(1, 10)
     memory_needed = random.randint(1, 10)
 
-    print("El proceso ", name, " llegó a la fase \"new\" en ", env.now)
+    print("El proceso", name, "llegó a la fase \"new\" en ", env.now, "\t Instrucciones restantes:", instructions)
 
     while instructions > 0:
         # Mientras queden instrucciones pido memoria a la ram
@@ -28,16 +28,21 @@ def process(env, name, ram, cpu, cpu_ips, max_time):
 
         # Mientras tengo RAM pido espacio al CPU
         while hasRam:
-            print("El proceso ", name, " llegó a la fase \"ready\" en ", env.now)
+            print("El proceso", name, "llegó a la fase \"ready\" en",
+                  env.now, "\t Instrucciones restantes:", instructions)
 
             # Pido espacio al CPU
             yield cpu.get(1)
-            print("El proceso", name, " está en la fase \"running\" en", env.now)
+            print("El proceso", name, "está en la fase \"running\" en",
+                  env.now, "\t Instrucciones restantes:", instructions)
 
             # Espero hasta lo que pase primero, me quede sin instrucciones o pase el tiempo maximo
             yield env.timeout(min(instructions / cpu_ips, max_time))
-            print("El proceso", name, "salió de la fase \"running\" en", env.now)
-            instructions = - time_given * cpu_ips
+            instructions = instructions - time_given * cpu_ips
+            if instructions < 0:
+                instructions = 0
+            print("El proceso", name, "salió de la fase \"running\" en",
+                  env.now, "\t Instrucciones restantes:", instructions)
 
             # Salgo del CPU
             yield cpu.put(1)
@@ -49,18 +54,18 @@ def process(env, name, ram, cpu, cpu_ips, max_time):
 
         # Si libere espacio de RAM y tengo instrucciones (en waiting) lo muestro
         if instructions > 0:
-            print("El proceso", name, "está en la fase \"waiting\" en", env.now)
+            print("El proceso", name, "está en la fase \"waiting\" en",
+                  env.now, "\t Instrucciones restantes:", instructions)
 
     # Al quedarme sin insrucciones imprimo que el proceso terminó
-    print("El proceso", name, "está en la fase \"terminated\" en", env.now)
+    print("El proceso", name, "está en la fase \"terminated\" en",
+          env.now, "\t Instrucciones restantes:", instructions)
 
 
+environment = simpy.Environment()
+RAM = simpy.Container(environment, init=RAM_memoria, capacity=RAM_memoria)
+CPU = simpy.Container(environment, init=1, capacity=1)
 
-env = simpy.Environment()
-RAM = simpy.Container(env, init=RAM_memoria, capacity=RAM_memoria)
-CPU = simpy.Container(env, init=1, capacity=1)
+environment.process(process(environment, "a", RAM, CPU, CPU_ips, time_given))
 
-for i in range(2):
-    env.process(process(env, i, RAM, CPU, CPU_ips, time_given))
-
-env.run()
+environment.run()
