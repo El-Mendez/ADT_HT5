@@ -11,13 +11,15 @@ CPU_ips = 1  # Instrucciones por unidad de tiempo que lee el CPU
 time_given = 3  # Es la cantidad de tiempo que se le da al procesador para hacer cada proceso
 cantidad_procesos = 25  # La cantidad de procesos que entraran al CPU
 intervalos_procesos = 10  # El intervalo del tiempo en que llegan los procesos (ditr exponencial)
+run_time = []             # Lista con los tiempos totales de cada proceso
 random.seed(10)
 
 
 # =========================== Simulación ===========================
-def process(env, name, ram, cpu, cpu_ips, max_time):
+def process(env, name, ram, cpu, cpu_ips, max_time, total_time):
     instructions = random.randint(1, 10)
     memory_needed = random.randint(1, 10)
+    time = env.now
 
     print("El proceso", name, "llegó a la fase \"new\" en ", env.now, "\t Instrucciones restantes:", instructions)
 
@@ -60,12 +62,19 @@ def process(env, name, ram, cpu, cpu_ips, max_time):
     # Al quedarme sin insrucciones imprimo que el proceso terminó
     print("El proceso", name, "está en la fase \"terminated\" en",
           env.now, "\t Instrucciones restantes:", instructions)
+    total_time.append(env.now - time)
 
 
 environment = simpy.Environment()
 RAM = simpy.Container(environment, init=RAM_memoria, capacity=RAM_memoria)
 CPU = simpy.Container(environment, init=1, capacity=1)
 
-environment.process(process(environment, "a", RAM, CPU, CPU_ips, time_given))
+environment.process(process(environment, "a", RAM, CPU, CPU_ips, time_given, run_time))
+environment.process(process(environment, "b", RAM, CPU, CPU_ips, time_given, run_time))
+environment.process(process(environment, "c", RAM, CPU, CPU_ips, time_given, run_time))
 
 environment.run()
+
+print("\nTiempos Totales:")
+for tiempo in run_time:
+    print(tiempo)
