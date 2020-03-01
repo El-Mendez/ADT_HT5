@@ -1,8 +1,6 @@
-'''
-author: men19195
-date: 29/02/2020
-file: Lab5
-'''
+# author: men19195
+# date: 29/02/2020
+# file: Lab5
 
 import simpy
 import random
@@ -17,41 +15,52 @@ random.seed(500)
 
 
 # =========================== Simulación ===========================
-def process(env, name, ram, cpu, cpu_ips, time_given):
+def process(env, name, ram, cpu, cpu_ips, max_time):
     instructions = random.randint(1, 10)
     memory_needed = random.randint(1, 10)
+
     print("El proceso ", name, " llegó a la fase \"new\" en ", env.now)
 
-    # Mientras queden instrucciones pido memoria a la ram
     while instructions > 0:
-        with ram.request(memory_needed) as ram_req:
-            yield ram_req
-            has_ram = True
+        # Mientras queden instrucciones pido memoria a la ram
+        yield ram.get(memory_needed)
+        hasRam = True
 
-            # Mientras no haya desocupado la RAM pido espacio al CPU
-            while has_ram:
-                print("El proceso", name, "está en la fase \"ready\" en", env.now)
-                with cpu.request() as cpu_req:
-                    yield cpu_req
+        # Mientras tengo RAM pido espacio al CPU
+        while hasRam:
+            print("El proceso ", name, " llegó a la fase \"ready\" en ", env.now)
 
-                    # Cuando estoy en el CPU, espero hasta terminar las instrucciones o a pasar la cant de tiempo max
-                    print("El proceso", name, " está en la fase \"running\" en", env.now)
-                    env.timeout(min(instructions / cpu_ips, time_given))
-                    print("El proceso", name, "salió de la fase \"ready\" en", env.now)
-                    instructions = - time_given * cpu_ips
+            # Pido espacio al CPU
+            yield cpu.get(1)
+            print("El proceso", name, " está en la fase \"running\" en", env.now)
 
-                # Después de liberar el CPU determino si tengo que liberar espacio de la RAM
-                has_ram = random.randint(1, 2) == 2 and instructions > 0
+            # Espero hasta lo que pase primero, me quede sin instrucciones o pase el tiempo maximo
+            yield env.timeout(min(instructions / cpu_ips, max_time))
+            print("El proceso", name, "salió de la fase \"running\" en", env.now)
+            instructions = - time_given * cpu_ips
 
-            # Si libere espacio de RAM y tengo instrucciones (en waiting) lo muestro
-            if instructions > 0:
-                print("El proceso", name, "está en la fase \"waiting\" en", env.now)
+            # Salgo del CPU
+            yield cpu.put(1)
 
-    # Al quedarme sin insrucciones imrpimo que el proceso terminó
+            # Veo si tengo tengo que devolver la RAM (terminé o waiting)
+            hasRam = random.randint(1, 2) == 2 and instructions > 0
+            if not hasRam:
+                yield ram.put(memory_needed)
+
+        # Si libere espacio de RAM y tengo instrucciones (en waiting) lo muestro
+        if instructions > 0:
+            print("El proceso", name, "está en la fase \"waiting\" en", env.now)
+
+    # Al quedarme sin insrucciones imprimo que el proceso terminó
     print("El proceso", name, "está en la fase \"terminated\" en", env.now)
 
 
 
 env = simpy.Environment()
-RAM = simpy.Container(env, capacity=RAM_memoria)
-CPU = simpy.Container(env, capacity=1)
+RAM = simpy.Container(env, init=RAM_memoria, capacity=RAM_memoria)
+CPU = simpy.Container(env, init=1, capacity=1)
+
+for i in range(2):
+    env.process(process(env, i, RAM, CPU, CPU_ips, time_given))
+
+env.run()
