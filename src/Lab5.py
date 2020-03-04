@@ -19,52 +19,50 @@ random.seed(10)
 run_time = []  # Lista con los tiempos totales de cada proceso
 
 
-def process(env, name, ram, cpu, cpu_ips, max_time, total_time):
+def process(env, name, ram, cpu, cpu_ips, max_time, total_time, arrival_intervals):
     instructions = random.randint(1, 10)
     memory_needed = random.randint(1, 10)
-    time = env.now
 
-    print("El proceso", name, "llegó a la fase \"new\" en ", env.now, "\t Instrucciones restantes:", instructions)
+    # Espero hasta que el carro aparezca
+    yield env.timeout(random.expovariate(1 / arrival_intervals))
+    time = env.now
+    print("El proceso %s ha sido creado en %.2f \t\t\t Instrucciones restantes: %d"
+          % (name, env.now, instructions))
+
+    # Durante el ciclo completo necesito RAM
+    yield ram.get(memory_needed)
 
     while instructions > 0:
-        # Mientras queden instrucciones pido memoria a la ram
-        yield ram.get(memory_needed)
-        hasRam = True
+        print("El proceso %s llegó a la fase \"ready\" en %.2f \t\t Instrucciones restantes: %d"
+              %(name, env.now, instructions))
 
-        # Mientras tengo RAM pido espacio al CPU
-        while hasRam:
-            print("El proceso", name, "llegó a la fase \"ready\" en",
-                  env.now, "\t Instrucciones restantes:", instructions)
+        # Mientras tengo instrucciones pido espacio al CPU
+        yield cpu.get(1)
+        print("El proceso %s entró a la fase \"running\" en %.2f \t Instrucciones restantes: %d"
+              % (name, env.now, instructions))
 
-            # Pido espacio al CPU
-            yield cpu.get(1)
-            print("El proceso", name, "está en la fase \"running\" en",
-                  env.now, "\t Instrucciones restantes:", instructions)
+        # Espero hasta lo que pase primero, me quede sin instrucciones o pase el tiempo maximo en CPU
+        yield env.timeout(min(instructions / cpu_ips, max_time))
+        instructions = instructions - time_given * cpu_ips
+        if instructions < 0:
+            instructions = 0
 
-            # Espero hasta lo que pase primero, me quede sin instrucciones o pase el tiempo maximo
-            yield env.timeout(min(instructions / cpu_ips, max_time))
-            instructions = instructions - time_given * cpu_ips
-            if instructions < 0:
-                instructions = 0
-            print("El proceso", name, "salió de la fase \"running\" en",
-                  env.now, "\t Instrucciones restantes:", instructions)
+        # Salgo del CPU
+        yield cpu.put(1)
+        print("El proceso %s salió de la fase \"running\" en %.2f \t Instrucciones restantes: %d"
+              % (name, env.now, instructions))
 
-            # Salgo del CPU
-            yield cpu.put(1)
+        # Veo si estoy en estado waiting
+        if random.randint(1, 2) == 2 and instructions > 0:
+            print("El proceso %s entró a la fase \"waiting\" en %.2f \t Instrucciones restantes: %d"
+                  % (name, env.now, instructions))
 
-            # Veo si tengo tengo que devolver la RAM (terminated o waiting) o no (ready)
-            hasRam = random.randint(1, 2) == 2 and instructions > 0
-            if not hasRam:
-                yield ram.put(memory_needed)
+    # Al quedarme sin insrucciones imprimo que el proceso terminó y decuelvo la RAM
+    yield ram.put(memory_needed)
+    print("El proceso %s fue finalizado en %.2f \t Instrucciones restantes: %d"
+          % (name, env.now, instructions))
 
-        # Si libere espacio de RAM y tengo instrucciones (en waiting) lo muestro
-        if instructions > 0:
-            print("El proceso", name, "está en la fase \"waiting\" en",
-                  env.now, "\t Instrucciones restantes:", instructions)
-
-    # Al quedarme sin insrucciones imprimo que el proceso terminó
-    print("El proceso", name, "está en la fase \"terminated\" en",
-          env.now, "\t Instrucciones restantes:", instructions)
+    # Añado el tiempo total a la lista total_time para guardar resultados
     total_time.append(env.now - time)
 
 
@@ -73,7 +71,7 @@ RAM = simpy.Container(environment, init=RAM_memoria, capacity=RAM_memoria)
 CPU = simpy.Container(environment, init=cantidad_CPU, capacity=cantidad_CPU)
 
 for i in range(cantidad_procesos):
-    environment.process(process(environment, i, RAM, CPU, CPU_ips, time_given, run_time))
+    environment.process(process(environment, i, RAM, CPU, CPU_ips, time_given, run_time, intervalos_procesos))
 
 environment.run()
 
@@ -99,7 +97,7 @@ def desviacion(cantidades):
 
 print("\nTiempos Totales:")
 for tiempo in run_time:
-    print(tiempo)
+    print(round(tiempo, 2))
 
 print("\nTiempo Promedio: %.2f"
       "\nDesviación estándar poblacional: %.2f" % (promedio(run_time), desviacion(run_time)))
